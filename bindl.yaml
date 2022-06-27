@@ -1,0 +1,24 @@
+platforms:
+  linux:
+    - amd64
+    - arm64
+  darwin:
+    - amd64
+    - arm64
+
+_uname: &uname
+  OS: &uname_OS
+    linux: Linux
+    darwin: Darwin
+  Arch: &uname_Arch
+    amd64: x86_64
+
+programs:
+  - name: golangci-lint
+    version: 1.46.2
+    provider: github
+    paths:
+      base: golangci/golangci-lint
+      target: "{{ .Name }}-{{ .Version }}-{{ .OS }}-{{ .Arch }}.tar.gz"
+      checksums:
+        artifact: "{{ .Name }}-{{ .Version }}-checksums.txt"
