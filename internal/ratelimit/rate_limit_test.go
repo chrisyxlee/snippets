@@ -18,13 +18,10 @@ func TestRateLimit(t *testing.T) {
 	ratelimit.SetClock(mc)
 
 	t.Run("not rate limited", func(t *testing.T) {
-		t.Parallel()
-
 		assert.False(t, ratelimit.WaitIfRateLimited(fmt.Errorf("blah")))
 	})
 
 	t.Run("rate limit time already passed", func(t *testing.T) {
-		t.Parallel()
 		assert.True(t, ratelimit.WaitIfRateLimited(&github.RateLimitError{
 			Rate: github.Rate{
 				Limit:     100,
@@ -37,8 +34,6 @@ func TestRateLimit(t *testing.T) {
 	})
 
 	t.Run("rate limited", func(t *testing.T) {
-		t.Parallel()
-
 		mc := clock.NewMock()
 		ratelimit.SetClock(mc)
 
