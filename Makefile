@@ -55,14 +55,14 @@ run: rebuild
 test/unit: gomod
 	${GO} test -race -short -v ./...
 
-.PHONY: test/integration
-test/integration: gomod
-	${GO} test -race -run ".*[Ii]ntegration.*" -v ./...
-
-.PHONY: test/functional
-test/functional: gomod
-	PATH=${PWD}/bin:${PATH} ${MAKE} bin/snippets
-	PATH=${PWD}/bin:${PATH} ${GO} test -race -run ".*[Ff]unctional.*" -v ./...
+# .PHONY: test/integration
+# test/integration: gomod
+# 	${GO} test -race -run ".*[Ii]ntegration.*" -v ./...
+#
+# .PHONY: test/functional
+# test/functional: gomod
+# 	PATH=${PWD}/bin:${PATH} ${MAKE} bin/snippets
+# 	PATH=${PWD}/bin:${PATH} ${GO} test -race -run ".*[Ff]unctional.*" -v ./...
 
 .PHONY: test/all
 test/all: gomod
