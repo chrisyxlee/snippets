@@ -13,15 +13,20 @@ bin/bindl:
 	mkdir -p ${PWD}/bin
 	curl --location https://bindl.dev/bootstrap.sh | OUTDIR=${PWD}/bin bash
 
+# To download Go dependencies.
+.PHONY: gomod
+gomod:
+	go mod tidy
+
 # ----------------------------------------------------------------------
 # Build
 # ----------------------------------------------------------------------
 
-bin/snippets:
+bin/snippets: gomod
 	@${GO} build -o bin/snippets ./cmd/snippets
 
 .PHONY: bin/snippets-dev
-bin/snippets-dev: bin/goreleaser
+bin/snippets-dev: bin/goreleaser gomod
 	bin/goreleaser build \
 		--output bin/snippets \
 		--single-target \
@@ -47,20 +52,20 @@ run: rebuild
 # ----------------------------------------------------------------------
 
 .PHONY: test/unit
-test/unit:
+test/unit: gomod
 	${GO} test -race -short -v ./...
 
 .PHONY: test/integration
-test/integration:
+test/integration: gomod
 	${GO} test -race -run ".*[Ii]ntegration.*" -v ./...
 
 .PHONY: test/functional
-test/functional:
+test/functional: gomod
 	PATH=${PWD}/bin:${PATH} ${MAKE} bin/snippets
 	PATH=${PWD}/bin:${PATH} ${GO} test -race -run ".*[Ff]unctional.*" -v ./...
 
 .PHONY: test/all
-test/all:
+test/all: gomod
 	${GO} test -race -v ./...
 
 # ----------------------------------------------------------------------
