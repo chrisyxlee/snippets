@@ -13,8 +13,8 @@ jobs:
       matrix:
         tests:
         - unit
-        - integration
-        - functional
+        # - integration
+        # - functional
     steps:
     - uses: actions/checkout@v3
 
