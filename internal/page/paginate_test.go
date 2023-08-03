@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/chrisyxlee/snippets/internal/page"
-	"github.com/google/go-github/v45/github"
+	"github.com/google/go-github/v53/github"
 	"github.com/stretchr/testify/assert"
 )
 

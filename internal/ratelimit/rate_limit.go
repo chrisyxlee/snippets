@@ -3,7 +3,7 @@ package ratelimit
 import (
 	"github.com/benbjohnson/clock"
 	"github.com/chrisyxlee/snippets/internal"
-	"github.com/google/go-github/v45/github"
+	"github.com/google/go-github/v53/github"
 )
 
 var clk = clock.New()

@@ -7,7 +7,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/chrisyxlee/snippets/internal/ratelimit"
-	"github.com/google/go-github/v45/github"
+	"github.com/google/go-github/v53/github"
 	"github.com/stretchr/testify/assert"
 )
 

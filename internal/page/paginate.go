@@ -3,7 +3,7 @@ package page
 import (
 	"github.com/chrisyxlee/snippets/internal"
 	"github.com/chrisyxlee/snippets/internal/ratelimit"
-	"github.com/google/go-github/v45/github"
+	"github.com/google/go-github/v53/github"
 )
 
 // Details are options that the caller can return to describe how to proceed
