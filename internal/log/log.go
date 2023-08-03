@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	l := log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).Level(zerolog.Disabled)
+	l := log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).Level(zerolog.DebugLevel)
 
 	Log = &l
 }
