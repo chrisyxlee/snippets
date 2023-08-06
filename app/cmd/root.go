@@ -167,9 +167,8 @@ var rootCmd = &cobra.Command{
 		categories[categoryCreatedAndCompletedWithin] = moveBy(allIssues, func(issue *github.Issue) bool {
 			return within(issue.GetCreatedAt().Time) && issue.GetState() == "closed"
 		})
-		fmt.Println(categories[categoryCreatedAndCompletedWithin][0])
 		categories[categoryGeneralUpdate] = moveBy(allIssues, func(issue *github.Issue) bool {
-			// TODO: and has a comment from this user
+			// TODO: and has a recent comment from this user
 			return issue.GetClosedAt().Before(startTime)
 		})
 		categories[categoryLongTermFinished] = moveBy(allIssues, func(issue *github.Issue) bool {
@@ -276,6 +275,40 @@ func fmtReactions(reactions *github.Reactions) string {
 	return ""
 }
 
+func fmtDuration(issue *github.Issue) string {
+	if issue.GetState() != "closed" {
+		return ""
+	}
+
+	// rough estimates, doesn't need to be exact
+	dur := issue.GetClosedAt().Sub(issue.GetCreatedAt().Time)
+	oneDay := time.Hour * 24
+	oneWeek := oneDay * 7
+	oneMonth := oneDay * 30
+	oneYear := oneDay * 365
+
+	var roughDuration string
+	switch {
+	case dur > oneYear:
+		roughDuration = fmt.Sprintf("%0.1fyr", dur.Seconds()/oneYear.Seconds())
+	case dur > oneMonth:
+		roughDuration = fmt.Sprintf("%0.1fmo", dur.Seconds()/oneMonth.Seconds())
+	case dur > oneWeek:
+		roughDuration = fmt.Sprintf("%0.1fw", dur.Seconds()/oneWeek.Seconds())
+	case dur > oneDay:
+		roughDuration = fmt.Sprintf("%0.1fd", dur.Seconds()/oneDay.Seconds())
+	case dur > time.Hour:
+		roughDuration = fmt.Sprintf("%0.1fh", dur.Seconds()/time.Hour.Seconds())
+	case dur > time.Minute:
+		roughDuration = fmt.Sprintf("%0.1fm", dur.Seconds()/time.Minute.Seconds())
+	case dur > time.Second:
+		roughDuration = fmt.Sprintf("%0.1fs", dur.Seconds()/time.Minute.Seconds())
+	}
+
+	return fmt.Sprintf(" after %s", roughDuration)
+
+}
+
 func fmtIssue(issue *github.Issue) string {
 	var label string
 	var status string
@@ -303,17 +336,18 @@ func fmtIssue(issue *github.Issue) string {
 	}
 
 	if issue.IsPullRequest() {
-		label = "PR"
+		label = "PR "
 	} else {
-		label = "Issue"
+		label = "Iss"
 	}
 
 	return fmt.Sprintf(
-		"%s %s #%d: %s by @%s%s",
+		"%s %s #%d: %s%s by @%s%s",
 		status,
 		label,
 		issue.GetNumber(),
 		issue.GetTitle(),
+		fmtDuration(issue),
 		issue.GetUser().GetLogin(),
 		fmtReactions(issue.GetReactions()))
 }
