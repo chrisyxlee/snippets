@@ -52,6 +52,10 @@ func getGitHubToken() (string, error) {
 	return "", errors.New("github token must be provided through GITHUB_TOKEN or GITHUB_OAUTH_TOKEN environment variables or through the gh CLI")
 }
 
+func fmtDate(t time.Time) string {
+	return t.Format("2006-01-02")
+}
+
 func getUsername() (string, error) {
 	if _, err := exec.LookPath("gh"); err == nil {
 		internal.Log().Debug().Msg("user has gh installed")
@@ -97,20 +101,29 @@ var rootCmd = &cobra.Command{
 			AccessToken: githubToken,
 		})))
 
+		categories := make(map[string][]*github.Issue)
+
 		/* Select repos to search in? */
 
 		/*
 		 Issues that were recently created.
 		*/
-		now := time.Now()
-		endTime := now.Format("2006-01-02")
-		startTime := now.Add(-7 * 24 * time.Hour).Format("2006-01-02")
+		endTime := time.Now()
+		startTime := endTime.Add(-2 * 7 * 24 * time.Hour)
+
+		internal.Log().Debug().
+			Str("start time", fmtDate(startTime)).
+			Str("end time", fmtDate(endTime)).
+			Msg("using time range")
+
 		issCreateQuery := fmt.Sprintf("author:%s created:%s..%s",
 			username,
-			startTime,
-			endTime,
+			fmtDate(startTime),
+			fmtDate(endTime),
 		)
-		internal.Log().Debug().Str("query", issCreateQuery).Msg("query issues by created time")
+		internal.Log().Debug().
+			Str("query", issCreateQuery).
+			Msg("query issues by created time")
 		issueRes, _, err := client.Search.Issues(
 			ctx,
 			issCreateQuery,
@@ -128,8 +141,8 @@ var rootCmd = &cobra.Command{
 
 		issModQuery := fmt.Sprintf("author:%s updated:%s..%s",
 			username,
-			startTime,
-			endTime,
+			fmtDate(startTime),
+			fmtDate(endTime),
 		)
 		internal.Log().Debug().Str("query", issModQuery).Msg("query issues by modified time")
 		issueRes, _, err = client.Search.Issues(
@@ -146,6 +159,25 @@ var rootCmd = &cobra.Command{
 		for _, issue := range issueRes.Issues {
 			allIssues[issue.GetURL()] = issue
 		}
+
+		within := func(target time.Time) bool {
+			return !startTime.After(target) && !endTime.Before(target)
+		}
+
+		categories[categoryCreatedAndCompletedWithin] = moveBy(allIssues, func(issue *github.Issue) bool {
+			return within(issue.GetCreatedAt().Time) && issue.GetState() == "closed"
+		})
+		fmt.Println(categories[categoryCreatedAndCompletedWithin][0])
+		categories[categoryGeneralUpdate] = moveBy(allIssues, func(issue *github.Issue) bool {
+			// TODO: and has a comment from this user
+			return issue.GetClosedAt().Before(startTime)
+		})
+		categories[categoryLongTermFinished] = moveBy(allIssues, func(issue *github.Issue) bool {
+			return issue.GetCreatedAt().Before(startTime) && issue.GetState() == "closed"
+		})
+		categories[categoryLongTermContinue] = moveBy(allIssues, func(issue *github.Issue) bool {
+			return issue.GetState() == "open"
+		})
 
 		/* Issues that were commented on
 		 */
@@ -177,16 +209,21 @@ var rootCmd = &cobra.Command{
 		//	return fmt.Errorf("search commit: %w", err)
 		//}
 
-		fmt.Println("issues:")
-
-		for _, issue := range allIssues {
-			title := issue.GetTitle()
-			number := issue.GetNumber()
-			label := "Issue"
-			if issue.IsPullRequest() {
-				label = "PR"
+		for category, issues := range categories {
+			if len(issues) == 0 {
+				continue
 			}
-			fmt.Printf("%s #%d: %s by %s\n", label, number, title, issue.GetUser().GetName())
+
+			fmt.Println(category)
+			for _, issue := range issues {
+				fmt.Println(fmtIssue(issue))
+			}
+			fmt.Println("")
+		}
+
+		fmt.Println("remaining issues and prs:")
+		for _, issue := range allIssues {
+			fmt.Println(fmtIssue(issue))
 		}
 
 		// TODO: perhaps commits should just be through the git log
@@ -199,6 +236,119 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+func moveBy(all map[string]*github.Issue, filterFn func(*github.Issue) bool) []*github.Issue {
+	out := make([]*github.Issue, 0, len(all))
+	for _, k := range lo.Keys(all) {
+		if filterFn(all[k]) {
+			out = append(out, all[k])
+			delete(all, k)
+		}
+	}
+	return out
+}
+
+func fmtReaction(emoji string, count int) string {
+	if count == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("%d %s", count, emoji)
+}
+
+func fmtReactions(reactions *github.Reactions) string {
+	content := strings.Join(lo.Filter([]string{
+		fmtReaction("❤️", reactions.GetHeart()),
+		fmtReaction("👀", reactions.GetEyes()),
+		fmtReaction("👍", reactions.GetPlusOne()),
+		fmtReaction("👎", reactions.GetMinusOne()),
+		fmtReaction("🚀", reactions.GetRocket()),
+		fmtReaction("🎉", reactions.GetHooray()),
+		fmtReaction("😃", reactions.GetLaugh()),
+		fmtReaction("😕", reactions.GetConfused()),
+	}, func(s string, _ int) bool {
+		return len(s) > 0
+	}), " ")
+
+	if len(content) > 0 {
+		return fmt.Sprintf(" (%s)", content)
+	}
+
+	return ""
+}
+
+func fmtIssue(issue *github.Issue) string {
+	var label string
+	var status string
+
+	if issue.GetState() == "closed" {
+		if issue.IsPullRequest() {
+			// TODO: how to tell if the pull request was merged or closed?
+			status = "✅"
+		} else {
+			switch issue.GetStateReason() {
+			case "not_planned":
+				status = "🗑"
+			case "completed":
+				status = "✅"
+			}
+		}
+	} else if issue.GetStateReason() == "reopened" {
+		status = "🔁"
+	} else {
+		if issue.IsPullRequest() {
+			status = "🚧"
+		} else {
+			status = "📂"
+		}
+	}
+
+	if issue.IsPullRequest() {
+		label = "PR"
+	} else {
+		label = "Issue"
+	}
+
+	return fmt.Sprintf(
+		"%s %s #%d: %s by @%s%s",
+		status,
+		label,
+		issue.GetNumber(),
+		issue.GetTitle(),
+		issue.GetUser().GetLogin(),
+		fmtReactions(issue.GetReactions()))
+}
+
 func Execute() error {
 	return rootCmd.Execute()
 }
+
+const (
+	categoryCreatedAndCompletedWithin = "create_complete_within"
+	categoryLongTermFinished          = "pulled_across_finish_line"
+	categoryLongTermContinue          = "long_term_continue"
+	categoryGeneralUpdate             = "general_update"
+)
+
+/*
+End goal: ??
+
+For the period of <start> to <end> (<duration>)...
+
+You created and merged these PRs:
+...
+
+You pulled these PRs across the finish line:
+...
+
+You started or continued work on these PRs:
+...
+
+You've filed X new issues:
+...
+
+You've updated these issues:
+...
+
+*/
+
+/* monthly snippets are maybe betteR? or biweekly? */
