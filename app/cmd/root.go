@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/chrisyxlee/snippets/internal"
 	"github.com/google/go-github/v53/github"
 	"github.com/samber/lo"
@@ -19,6 +20,13 @@ import (
 
 var (
 	reUsername = regexp.MustCompile(`Logged in to .* as (.*) \(.*\)`)
+)
+
+var (
+	styleNumber = lipgloss.NewStyle().
+		AlignHorizontal(lipgloss.Right).
+		Bold(true).
+		Width(9)
 )
 
 func getGitHubToken() (string, error) {
@@ -309,8 +317,19 @@ func fmtDuration(issue *github.Issue) string {
 
 }
 
-func fmtIssue(issue *github.Issue) string {
+func fmtNumber(issue *github.Issue) string {
 	var label string
+	if issue.IsPullRequest() {
+		label = "PR"
+	} else {
+		label = "IS"
+	}
+
+	return styleNumber.Render(fmt.Sprintf("%s #%d", label, issue.GetNumber()))
+}
+
+func fmtIssue(issue *github.Issue) string {
+	// TODO: format the repo?
 	var status string
 
 	if issue.GetState() == "closed" {
@@ -335,17 +354,10 @@ func fmtIssue(issue *github.Issue) string {
 		}
 	}
 
-	if issue.IsPullRequest() {
-		label = "PR "
-	} else {
-		label = "Iss"
-	}
-
 	return fmt.Sprintf(
-		"%s %s #%d: %s%s by @%s%s",
+		"%s %s: %s%s by @%s%s",
 		status,
-		label,
-		issue.GetNumber(),
+		fmtNumber(issue),
 		issue.GetTitle(),
 		fmtDuration(issue),
 		issue.GetUser().GetLogin(),
