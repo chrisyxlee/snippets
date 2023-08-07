@@ -191,8 +191,12 @@ var rootCmd = &cobra.Command{
 
 `)
 
+		completedIssues := lo.Map(categories[categoryCreatedAndCompletedWithin], func(issue *github.Issue, _ int) *format.CompletedIssue {
+			return format.ParseCompleted(issue)
+		})
+		completedIssuesParams := format.GetCompletedIssueParams(completedIssues)
 		for _, issue := range categories[categoryCreatedAndCompletedWithin] {
-			report.WriteString(format.ParseCompleted(issue).String())
+			report.WriteString(format.ParseCompleted(issue).Format(completedIssuesParams))
 			report.WriteRune('\n')
 		}
 

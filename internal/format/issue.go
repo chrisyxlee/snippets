@@ -26,42 +26,77 @@ type CompletedIssue struct {
 	Reactions string
 }
 
-func (ci *CompletedIssue) String() string {
-	idStr := lipgloss.NewStyle().Align(lipgloss.Left).BorderRight(true).Render(ci.ID)
+type CompletedIssueParams struct {
+	ID        int
+	Status    int
+	Title     int
+	Duration  int
+	Reactions int
+}
+
+func GetCompletedIssueParams(issues []*CompletedIssue) CompletedIssueParams {
+	return CompletedIssueParams{
+		ID: lo.Max(lo.Map(issues, func(issue *CompletedIssue, _ int) int {
+			return len(issue.ID)
+		})),
+		Status: lo.Max(lo.Map(issues, func(issue *CompletedIssue, _ int) int {
+			return len(issue.Status)
+		})),
+		Title: lo.Max(lo.Map(issues, func(issue *CompletedIssue, _ int) int {
+			return len(issue.Title)
+		})),
+		Duration: lo.Max(lo.Map(issues, func(issue *CompletedIssue, _ int) int {
+			return len(issue.Duration)
+		})),
+		Reactions: lo.Max(lo.Map(issues, func(issue *CompletedIssue, _ int) int {
+			return len(issue.Reactions)
+		})),
+	}
+}
+
+func (ci *CompletedIssue) Format(params CompletedIssueParams) string {
+	idStr := lipgloss.NewStyle().Align(lipgloss.Left).BorderRight(true).Width(params.ID).Render(ci.ID)
 	var styleStatus lipgloss.Style
 
-	switch ci.Status{
+	statusStyle := lipgloss.NewStyle().Width(params.Status)
+	switch ci.Status {
 	case "merged":
-		styleStatus =lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+		styleStatus = statusStyle.Foreground(lipgloss.AdaptiveColor{
 			Light: "#a742f5",
-			Dark: "#d194ff",
+			Dark:  "#d194ff",
 		})
 	case "active":
-		styleStatus =lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+		styleStatus = statusStyle.Foreground(lipgloss.AdaptiveColor{
 			Light: "#ffaa54",
-			Dark: "#ffc994",
+			Dark:  "#ffc994",
 		})
 	case "done":
-		styleStatus =lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+		styleStatus = statusStyle.Foreground(lipgloss.AdaptiveColor{
 			Light: "#87ff54",
-			Dark: "#caf7b7",
+			Dark:  "#caf7b7",
 		})
 	case "dropped":
-		styleStatus =lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+		styleStatus = statusStyle.Foreground(lipgloss.AdaptiveColor{
 			Light: "#333333",
-			Dark: "#878787",
+			Dark:  "#878787",
 		})
 	}
 
-	var durStr string
-	if len(ci.Duration) > 0{
-		durStr = fmt.Sprintf(" (%s) ", ci.Duration)
-	}
 
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf(`%s %s%s - %s`, idStr, styleStatus.Render(ci.Status), durStr, ci.Title))
+	buf.WriteString(idStr)
+	buf.WriteString(" ")
+	buf.WriteString(styleStatus.Render(ci.Status))
+	if len(ci.Duration) > 0 {
+		buf.WriteString(" (")
+		buf.WriteString(lipgloss.NewStyle().Width(params.Duration).Render(ci.Duration))
+		buf.WriteRune(')')
+	}
+	buf.WriteString(" - ")
+	buf.WriteString(ci.Title)
 	if len(ci.Reactions) > 0 {
-		buf.WriteString(fmt.Sprintf(" (%s) ", ci.Reactions))
+		buf.WriteRune(' ')
+		buf.WriteString(ci.Reactions)
 	}
 
 	return buf.String()
@@ -69,16 +104,14 @@ func (ci *CompletedIssue) String() string {
 
 func ParseCompleted(issue *github.Issue) *CompletedIssue {
 	// TODO: if only limited to 1 repo, then don't print
-	repo := issue.GetRepository()
 	return &CompletedIssue{
-		ID:        fmt.Sprintf("%s/%s %s", repo.GetOrganization().GetLogin(), repo.GetName(), fmtNumber(issue)),
+		ID:        fmtNumber(issue),
 		Status:    fmtStatus(issue),
 		Title:     issue.GetTitle(),
 		Duration:  fmtDuration(issue),
 		Reactions: fmtReactions(issue.GetReactions()),
 	}
 }
-
 
 func Issue(issue *github.Issue) string {
 	// TODO: format the repo?
@@ -181,7 +214,7 @@ func fmtDuration(issue *github.Issue) string {
 		roughDuration = fmt.Sprintf("%0.1fs", dur.Seconds()/time.Minute.Seconds())
 	}
 
-	return fmt.Sprintf(" after %s", roughDuration)
+	return roughDuration
 
 }
 
