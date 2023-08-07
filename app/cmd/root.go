@@ -166,18 +166,39 @@ var rootCmd = &cobra.Command{
 		}
 
 		categories[categoryCreatedAndCompletedWithin] = moveBy(allIssues, func(issue *github.Issue) bool {
-			return within(issue.GetCreatedAt().Time) && issue.GetState() == "closed"
+			return issue.GetState() == "closed" && (within(issue.GetCreatedAt().Time) || issue.GetCreatedAt().Before(startTime))
 		})
 		categories[categoryGeneralUpdate] = moveBy(allIssues, func(issue *github.Issue) bool {
 			// TODO: and has a recent comment from this user
 			return issue.GetClosedAt().Before(startTime)
 		})
-		categories[categoryLongTermFinished] = moveBy(allIssues, func(issue *github.Issue) bool {
-			return issue.GetCreatedAt().Before(startTime) && issue.GetState() == "closed"
-		})
 		categories[categoryLongTermContinue] = moveBy(allIssues, func(issue *github.Issue) bool {
 			return issue.GetState() == "open"
 		})
+
+		// TODO: ask for user to input summary that can be placed in here?
+
+		var report bytes.Buffer
+		// weekly report for username: YYYY-mm-dd
+		report.WriteString(fmt.Sprintf(`# %s report for %s: %s
+
+`,
+			format.DurationAsAdj(endTime.Sub(startTime)),
+			username,
+			fmtDate(startTime)))
+
+		report.WriteString(`## Completed this cycle
+
+`)
+
+		for _, issue := range categories[categoryCreatedAndCompletedWithin] {
+			report.WriteString(format.ParseCompleted(issue).String())
+			report.WriteRune('\n')
+		}
+
+		// TODO: allow editing the final report
+		// TODO: write the report somewhere (dump into a file?)
+		// TODO: optional, allow json so that we can format more
 
 		/* Issues that were commented on
 		 */
@@ -209,22 +230,26 @@ var rootCmd = &cobra.Command{
 		//	return fmt.Errorf("search commit: %w", err)
 		//}
 
-		for category, issues := range categories {
-			if len(issues) == 0 {
-				continue
+		fmt.Println(report.String())
+
+		/*
+			for category, issues := range categories {
+				if len(issues) == 0 {
+					continue
+				}
+
+				fmt.Println(category)
+				for _, issue := range issues {
+					fmt.Println(format.Issue(issue))
+				}
+				fmt.Println("")
 			}
 
-			fmt.Println(category)
-			for _, issue := range issues {
+			fmt.Println("remaining issues and prs:")
+			for _, issue := range allIssues {
 				fmt.Println(format.Issue(issue))
 			}
-			fmt.Println("")
-		}
-
-		fmt.Println("remaining issues and prs:")
-		for _, issue := range allIssues {
-			fmt.Println(format.Issue(issue))
-		}
+		*/
 
 		// TODO: perhaps commits should just be through the git log
 		// fmt.Println("commits:")

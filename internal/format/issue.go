@@ -1,6 +1,7 @@
 package format
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"time"
@@ -17,40 +18,113 @@ var (
 		Width(9)
 )
 
-func Issue(issue *github.Issue) string {
-	// TODO: format the repo?
-	var status string
+type CompletedIssue struct {
+	ID        string
+	Status    string
+	Title     string
+	Duration  string
+	Reactions string
+}
 
-	if issue.GetState() == "closed" {
-		if issue.IsPullRequest() {
-			// TODO: how to tell if the pull request was merged or closed?
-			status = "✅"
-		} else {
-			switch issue.GetStateReason() {
-			case "not_planned":
-				status = "🗑"
-			case "completed":
-				status = "✅"
-			}
-		}
-	} else if issue.GetStateReason() == "reopened" {
-		status = "🔁"
-	} else {
-		if issue.IsPullRequest() {
-			status = "🚧"
-		} else {
-			status = "📂"
-		}
+func (ci *CompletedIssue) String() string {
+	idStr := lipgloss.NewStyle().Align(lipgloss.Left).BorderRight(true).Render(ci.ID)
+	var styleStatus lipgloss.Style
+
+	switch ci.Status{
+	case "merged":
+		styleStatus =lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+			Light: "#a742f5",
+			Dark: "#d194ff",
+		})
+	case "active":
+		styleStatus =lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+			Light: "#ffaa54",
+			Dark: "#ffc994",
+		})
+	case "done":
+		styleStatus =lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+			Light: "#87ff54",
+			Dark: "#caf7b7",
+		})
+	case "dropped":
+		styleStatus =lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+			Light: "#333333",
+			Dark: "#878787",
+		})
 	}
 
+	var durStr string
+	if len(ci.Duration) > 0{
+		durStr = fmt.Sprintf(" (%s) ", ci.Duration)
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf(`%s %s%s - %s`, idStr, styleStatus.Render(ci.Status), durStr, ci.Title))
+	if len(ci.Reactions) > 0 {
+		buf.WriteString(fmt.Sprintf(" (%s) ", ci.Reactions))
+	}
+
+	return buf.String()
+}
+
+func ParseCompleted(issue *github.Issue) *CompletedIssue {
+	// TODO: if only limited to 1 repo, then don't print
+	repo := issue.GetRepository()
+	return &CompletedIssue{
+		ID:        fmt.Sprintf("%s/%s %s", repo.GetOrganization().GetLogin(), repo.GetName(), fmtNumber(issue)),
+		Status:    fmtStatus(issue),
+		Title:     issue.GetTitle(),
+		Duration:  fmtDuration(issue),
+		Reactions: fmtReactions(issue.GetReactions()),
+	}
+}
+
+
+func Issue(issue *github.Issue) string {
+	// TODO: format the repo?
+
+	/*
+		  PR #1234 | in prog | some title goes here (reactions) | 30m
+		             merged
+						 dropped
+
+						 orange = in prog
+						 green or purple = merged
+						 grey = dropped
+
+	*/
 	return fmt.Sprintf(
-		"%s %s: %s%s by @%s%s",
-		status,
+		`%s %s: %s%s by @%s%s`,
+		fmtStatus(issue),
 		fmtNumber(issue),
 		issue.GetTitle(),
 		fmtDuration(issue),
 		issue.GetUser().GetLogin(),
 		fmtReactions(issue.GetReactions()))
+}
+
+func fmtStatus(issue *github.Issue) string {
+	var status string
+
+	if issue.GetState() == "closed" {
+		if issue.IsPullRequest() {
+			// TODO: how to tell if the pull request was merged or closed?
+			status = "merged"
+		} else {
+			switch issue.GetStateReason() {
+			case "not_planned":
+				status = "dropped"
+			case "completed":
+				status = "done"
+			}
+		}
+	} else if issue.GetStateReason() == "reopened" {
+		status = "active"
+	} else {
+		status = "active"
+	}
+
+	return status
 }
 
 func fmtReaction(emoji string, count int) string {
@@ -89,11 +163,6 @@ func fmtDuration(issue *github.Issue) string {
 
 	// rough estimates, doesn't need to be exact
 	dur := issue.GetClosedAt().Sub(issue.GetCreatedAt().Time)
-	oneDay := time.Hour * 24
-	oneWeek := oneDay * 7
-	oneMonth := oneDay * 30
-	oneYear := oneDay * 365
-
 	var roughDuration string
 	switch {
 	case dur > oneYear:
