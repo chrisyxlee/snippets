@@ -14,11 +14,11 @@ import (
 var (
 	styleNumber = lipgloss.NewStyle().
 		AlignHorizontal(lipgloss.Right).
-		Bold(true).
-		Width(9)
+		Bold(true)
 )
 
 type CompletedIssue struct {
+	Type      string
 	ID        string
 	Status    string
 	Title     string
@@ -26,7 +26,8 @@ type CompletedIssue struct {
 	Reactions string
 }
 
-type CompletedIssueParams struct {
+type completedIssueWidths struct {
+	Type      int
 	ID        int
 	Status    int
 	Title     int
@@ -34,8 +35,11 @@ type CompletedIssueParams struct {
 	Reactions int
 }
 
-func GetCompletedIssueParams(issues []*CompletedIssue) CompletedIssueParams {
-	return CompletedIssueParams{
+func GetCompletedIssueParams(issues []*CompletedIssue) completedIssueWidths {
+	return completedIssueWidths{
+		Type: lo.Max(lo.Map(issues, func(issue *CompletedIssue, _ int) int {
+			return len(issue.Type)
+		})),
 		ID: lo.Max(lo.Map(issues, func(issue *CompletedIssue, _ int) int {
 			return len(issue.ID)
 		})),
@@ -54,10 +58,11 @@ func GetCompletedIssueParams(issues []*CompletedIssue) CompletedIssueParams {
 	}
 }
 
-func (ci *CompletedIssue) Format(params CompletedIssueParams) string {
+func (ci *CompletedIssue) Format(params completedIssueWidths) string {
+	typeStr := lipgloss.NewStyle().Align(lipgloss.Right).BorderRight(true).Width(params.Type).Render(ci.Type)
 	idStr := lipgloss.NewStyle().Align(lipgloss.Left).BorderRight(true).Width(params.ID).Render(ci.ID)
-	var styleStatus lipgloss.Style
 
+	var styleStatus lipgloss.Style
 	statusStyle := lipgloss.NewStyle().Width(params.Status)
 	switch ci.Status {
 	case "merged":
@@ -82,15 +87,15 @@ func (ci *CompletedIssue) Format(params CompletedIssueParams) string {
 		})
 	}
 
-
 	var buf bytes.Buffer
+	buf.WriteString(typeStr)
+	buf.WriteRune(' ')
 	buf.WriteString(idStr)
 	buf.WriteString(" ")
 	buf.WriteString(styleStatus.Render(ci.Status))
 	if len(ci.Duration) > 0 {
-		buf.WriteString(" (")
+		buf.WriteRune(' ')
 		buf.WriteString(lipgloss.NewStyle().Width(params.Duration).Render(ci.Duration))
-		buf.WriteRune(')')
 	}
 	buf.WriteString(" - ")
 	buf.WriteString(ci.Title)
@@ -105,35 +110,13 @@ func (ci *CompletedIssue) Format(params CompletedIssueParams) string {
 func ParseCompleted(issue *github.Issue) *CompletedIssue {
 	// TODO: if only limited to 1 repo, then don't print
 	return &CompletedIssue{
-		ID:        fmtNumber(issue),
+		Type:      fmtType(issue),
+		ID:        styleNumber.Render(fmt.Sprintf("#%d", issue.GetNumber())),
 		Status:    fmtStatus(issue),
 		Title:     issue.GetTitle(),
-		Duration:  fmtDuration(issue),
+		Duration:  fmt.Sprintf("(%s)", fmtDuration(issue)),
 		Reactions: fmtReactions(issue.GetReactions()),
 	}
-}
-
-func Issue(issue *github.Issue) string {
-	// TODO: format the repo?
-
-	/*
-		  PR #1234 | in prog | some title goes here (reactions) | 30m
-		             merged
-						 dropped
-
-						 orange = in prog
-						 green or purple = merged
-						 grey = dropped
-
-	*/
-	return fmt.Sprintf(
-		`%s %s: %s%s by @%s%s`,
-		fmtStatus(issue),
-		fmtNumber(issue),
-		issue.GetTitle(),
-		fmtDuration(issue),
-		issue.GetUser().GetLogin(),
-		fmtReactions(issue.GetReactions()))
 }
 
 func fmtStatus(issue *github.Issue) string {
@@ -218,7 +201,7 @@ func fmtDuration(issue *github.Issue) string {
 
 }
 
-func fmtNumber(issue *github.Issue) string {
+func fmtType(issue *github.Issue) string {
 	var label string
 	if issue.IsPullRequest() {
 		label = "PR"
@@ -226,5 +209,5 @@ func fmtNumber(issue *github.Issue) string {
 		label = "IS"
 	}
 
-	return styleNumber.Render(fmt.Sprintf("%s #%d", label, issue.GetNumber()))
+	return styleNumber.Render(label)
 }

@@ -22,6 +22,9 @@ var (
 	reUsername = regexp.MustCompile(`Logged in to .* as (.*) \(.*\)`)
 )
 
+// TODO: generate report
+// TODO: view report (give directory, use glamour?)
+
 func getGitHubToken() (string, error) {
 	githubToken, ok := os.LookupEnv("GITHUB_TOKEN")
 	if ok && len(githubToken) > 0 {

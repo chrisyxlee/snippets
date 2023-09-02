@@ -23,7 +23,7 @@ gomod:
 # ----------------------------------------------------------------------
 
 bin/snippets: gomod
-	@${GO} build -o bin/snippets ./cmd/snippets
+	@${GO} build -o bin/snippets ./app/cmd/
 
 .PHONY: bin/snippets-dev
 bin/snippets-dev: bin/goreleaser gomod
@@ -46,6 +46,9 @@ RUN_FLAGS +=
 .PHONY: run
 run: rebuild
 	@./bin/snippets --debug
+
+run-local:
+	@go run ./app
 
 # ----------------------------------------------------------------------
 # Tests
