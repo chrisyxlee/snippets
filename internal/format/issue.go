@@ -114,7 +114,7 @@ func ParseCompleted(issue *github.Issue) *CompletedIssue {
 		ID:        styleNumber.Render(fmt.Sprintf("#%d", issue.GetNumber())),
 		Status:    fmtStatus(issue),
 		Title:     issue.GetTitle(),
-		Duration:  fmt.Sprintf("(%s)", fmtDuration(issue)),
+		Duration:  fmtDuration(issue),
 		Reactions: fmtReactions(issue.GetReactions()),
 	}
 }
@@ -197,8 +197,11 @@ func fmtDuration(issue *github.Issue) string {
 		roughDuration = fmt.Sprintf("%0.1fs", dur.Seconds()/time.Minute.Seconds())
 	}
 
-	return roughDuration
+	if len(roughDuration) > 0 {
+		return fmt.Sprintf("(%s)", roughDuration)
+	}
 
+	return ""
 }
 
 func fmtType(issue *github.Issue) string {

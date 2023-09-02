@@ -22,7 +22,9 @@ var (
 	reUsername = regexp.MustCompile(`Logged in to .* as (.*) \(.*\)`)
 )
 
-// TODO: generate report
+// TODO: create a pie chart for how long you spent on each issue? (length of comment / most number of comments in this cycle) -- gantt??
+// don't want this to be a slippery slope into MTTR lol
+
 // TODO: view report (give directory, use glamour?)
 
 func getGitHubToken() (string, error) {
@@ -193,13 +195,33 @@ var rootCmd = &cobra.Command{
 		report.WriteString(`## Completed this cycle
 
 `)
-
 		completedIssues := lo.Map(categories[categoryCreatedAndCompletedWithin], func(issue *github.Issue, _ int) *format.CompletedIssue {
 			return format.ParseCompleted(issue)
 		})
 		completedIssuesParams := format.GetCompletedIssueParams(completedIssues)
-		for _, issue := range categories[categoryCreatedAndCompletedWithin] {
-			report.WriteString(format.ParseCompleted(issue).Format(completedIssuesParams))
+		for _, issue := range completedIssues {
+			report.WriteString(issue.Format(completedIssuesParams))
+			report.WriteRune('\n')
+		}
+
+		/* 		categories[categoryGeneralUpdate] = moveBy(allIssues, func(issue *github.Issue) bool {
+			// TODO: and has a recent comment from this user
+			return issue.GetClosedAt().Before(startTime)
+		})
+		categories[categoryLongTermContinue] = moveBy(allIssues, func(issue *github.Issue) bool {
+			return issue.GetState() == "open"
+		})
+		*/
+
+		report.WriteString(`## Updated this cycle
+
+`)
+		updatedIssues := lo.Map(categories[categoryGeneralUpdate], func(issue *github.Issue, _ int) *format.CompletedIssue {
+			return format.ParseCompleted(issue)
+		})
+		updatedIssuesParams := format.GetCompletedIssueParams(completedIssues)
+		for _, issue := range updatedIssues {
+			report.WriteString(issue.Format(updatedIssuesParams))
 			report.WriteRune('\n')
 		}
 
