@@ -3,13 +3,36 @@ package format
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
+	u "github.com/bcicen/go-units"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/google/go-github/v53/github"
 	"github.com/samber/lo"
 )
+
+var (
+	uWeek                u.Unit
+	orderedDurationUnits []u.Unit
+)
+
+func init() {
+	uWeek = u.NewUnit("week", "wk", u.UnitOptionPlural("auto"))
+	u.NewRatioConversion(uWeek, u.Day, 7)
+
+	orderedDurationUnits = []u.Unit{
+		u.Year,
+		u.Month,
+		uWeek,
+		u.Day,
+		u.Hour,
+		u.Minute,
+		u.Second,
+		u.MilliSecond,
+	}
+}
 
 var (
 	styleNumber = lipgloss.NewStyle().
@@ -207,29 +230,22 @@ func fmtDuration(issue *github.Issue) string {
 		dur = time.Since(issue.CreatedAt.Time)
 	}
 
-	var roughDuration string
-	switch {
-	case dur > oneYear:
-		roughDuration = fmt.Sprintf("%0.1fyr", dur.Seconds()/oneYear.Seconds())
-	case dur > oneMonth:
-		roughDuration = fmt.Sprintf("%0.1fmo", dur.Seconds()/oneMonth.Seconds())
-	case dur > oneWeek:
-		roughDuration = fmt.Sprintf("%0.1fw", dur.Seconds()/oneWeek.Seconds())
-	case dur > oneDay:
-		roughDuration = fmt.Sprintf("%0.1fd", dur.Seconds()/oneDay.Seconds())
-	case dur > time.Hour:
-		roughDuration = fmt.Sprintf("%0.1fh", dur.Seconds()/time.Hour.Seconds())
-	case dur > time.Minute:
-		roughDuration = fmt.Sprintf("%0.1fm", dur.Seconds()/time.Minute.Seconds())
-	case dur > time.Second:
-		roughDuration = fmt.Sprintf("%0.1fs", dur.Seconds()/time.Minute.Seconds())
+	val := u.NewValue(dur.Seconds(), u.Second)
+	var newVal u.Value
+	for _, unit := range orderedDurationUnits {
+		convertedVal := val.MustConvert(unit)
+		if convertedVal.Float() > 1 {
+			newVal = u.NewValue(math.Ceil(convertedVal.Float()), convertedVal.Unit())
+			break
+		}
 	}
 
-	if len(roughDuration) > 0 {
-		return fmt.Sprintf("(%s)", roughDuration)
-	}
+	fmtVal := newVal.Fmt(u.FmtOptions{
+		Label:     true,
+		Precision: 1,
+	})
 
-	return ""
+	return fmt.Sprintf("<=%s", fmtVal)
 }
 
 func fmtType(issue *github.Issue) string {

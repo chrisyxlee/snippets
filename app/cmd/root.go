@@ -283,13 +283,6 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-const (
-	categoryCreatedAndCompletedWithin = "create_complete_within"
-	categoryLongTermFinished          = "pulled_across_finish_line"
-	categoryLongTermContinue          = "long_term_continue"
-	categoryGeneralUpdate             = "general_update"
-)
-
 /*
 End goal: ??
 

@@ -3,6 +3,7 @@ module github.com/chrisyxlee/snippets
 go 1.18
 
 require (
+	github.com/bcicen/go-units v1.0.5
 	github.com/benbjohnson/clock v1.3.0
 	github.com/charmbracelet/lipgloss v0.7.1
 	github.com/google/go-github/v53 v53.2.0
@@ -14,8 +15,10 @@ require (
 )
 
 require (
+	github.com/Knetic/govaluate v3.0.0+incompatible // indirect
 	github.com/ProtonMail/go-crypto v0.0.0-20230217124315-7d5c6f04bbb8 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/bcicen/bfstree v1.0.0 // indirect
 	github.com/cloudflare/circl v1.3.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
