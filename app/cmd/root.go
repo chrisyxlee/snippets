@@ -107,8 +107,6 @@ var rootCmd = &cobra.Command{
 			AccessToken: githubToken,
 		})))
 
-		categories := make(map[string][]*github.Issue)
-
 		/* Select repos to search in? */
 
 		/*
@@ -170,17 +168,6 @@ var rootCmd = &cobra.Command{
 			return !startTime.After(target) && !endTime.Before(target)
 		}
 
-		categories[categoryCreatedAndCompletedWithin] = moveBy(allIssues, func(issue *github.Issue) bool {
-			return issue.GetState() == "closed" && (within(issue.GetCreatedAt().Time) || issue.GetCreatedAt().Before(startTime))
-		})
-		categories[categoryGeneralUpdate] = moveBy(allIssues, func(issue *github.Issue) bool {
-			// TODO: and has a recent comment from this user
-			return issue.GetClosedAt().Before(startTime)
-		})
-		categories[categoryLongTermContinue] = moveBy(allIssues, func(issue *github.Issue) bool {
-			return issue.GetState() == "open"
-		})
-
 		// TODO: ask for user to input summary that can be placed in here?
 
 		var report bytes.Buffer
@@ -192,38 +179,27 @@ var rootCmd = &cobra.Command{
 			username,
 			fmtDate(startTime)))
 
-		report.WriteString(`## Completed this cycle
+		report.WriteString(format.FormatSection("Completed this cycle",
+			moveBy(
+				allIssues,
+				func(issue *github.Issue) bool {
+					return issue.GetState() == "closed" && (within(issue.GetCreatedAt().Time) || issue.GetCreatedAt().Before(startTime))
+				})))
 
-`)
-		completedIssues := lo.Map(categories[categoryCreatedAndCompletedWithin], func(issue *github.Issue, _ int) *format.CompletedIssue {
-			return format.ParseCompleted(issue)
-		})
-		completedIssuesParams := format.GetCompletedIssueParams(completedIssues)
-		for _, issue := range completedIssues {
-			report.WriteString(issue.Format(completedIssuesParams))
-			report.WriteRune('\n')
-		}
+		report.WriteString(format.FormatSection("Updated this cycle",
+			moveBy(
+				allIssues,
+				func(issue *github.Issue) bool {
+					// TODO: and has a recent comment from this user
+					return issue.GetClosedAt().Before(startTime)
+				})))
 
-		/* 		categories[categoryGeneralUpdate] = moveBy(allIssues, func(issue *github.Issue) bool {
-			// TODO: and has a recent comment from this user
-			return issue.GetClosedAt().Before(startTime)
-		})
-		categories[categoryLongTermContinue] = moveBy(allIssues, func(issue *github.Issue) bool {
-			return issue.GetState() == "open"
-		})
-		*/
-
-		report.WriteString(`## Updated this cycle
-
-`)
-		updatedIssues := lo.Map(categories[categoryGeneralUpdate], func(issue *github.Issue, _ int) *format.CompletedIssue {
-			return format.ParseCompleted(issue)
-		})
-		updatedIssuesParams := format.GetCompletedIssueParams(completedIssues)
-		for _, issue := range updatedIssues {
-			report.WriteString(issue.Format(updatedIssuesParams))
-			report.WriteRune('\n')
-		}
+		report.WriteString(format.FormatSection("Remaining",
+			moveBy(
+				allIssues,
+				func(issue *github.Issue) bool {
+					return true
+				})))
 
 		// TODO: allow editing the final report
 		// TODO: write the report somewhere (dump into a file?)
@@ -290,8 +266,10 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-func moveBy(all map[string]*github.Issue, filterFn func(*github.Issue) bool) []*github.Issue {
-	out := make([]*github.Issue, 0, len(all))
+// Moves all items passing the filter into the output slice. Items that are
+// matching the filter are removed from the original map.
+func moveBy[T any](all map[string]T, filterFn func(T) bool) []T {
+	out := make([]T, 0, len(all))
 	for _, k := range lo.Keys(all) {
 		if filterFn(all[k]) {
 			out = append(out, all[k])

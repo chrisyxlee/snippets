@@ -119,6 +119,32 @@ func ParseCompleted(issue *github.Issue) *CompletedIssue {
 	}
 }
 
+func ParseAllCompleted(issues []*github.Issue) []*CompletedIssue {
+	return lo.Map(issues, func(issue *github.Issue, _ int) *CompletedIssue {
+		return ParseCompleted(issue)
+	})
+}
+
+func FormatSection(title string, issues []*github.Issue) string {
+	if len(issues) == 0 {
+		return ""
+	}
+
+	var section bytes.Buffer
+	updatedIssues := ParseAllCompleted(issues)
+	section.WriteString("## ")
+	section.WriteString(title)
+	section.WriteString("\n\n")
+	updatedIssuesParams := GetCompletedIssueParams(updatedIssues)
+	for _, issue := range updatedIssues {
+		section.WriteString(issue.Format(updatedIssuesParams))
+		section.WriteRune('\n')
+	}
+	section.WriteRune('\n')
+
+	return section.String()
+}
+
 func fmtStatus(issue *github.Issue) string {
 	var status string
 
@@ -173,12 +199,14 @@ func fmtReactions(reactions *github.Reactions) string {
 }
 
 func fmtDuration(issue *github.Issue) string {
-	if issue.GetState() != "closed" {
-		return ""
+	// rough estimates, doesn't need to be exact
+	var dur time.Duration
+	if issue.GetState() == "closed" {
+		dur = issue.GetClosedAt().Sub(issue.GetCreatedAt().Time)
+	} else {
+		dur = time.Since(issue.CreatedAt.Time)
 	}
 
-	// rough estimates, doesn't need to be exact
-	dur := issue.GetClosedAt().Sub(issue.GetCreatedAt().Time)
 	var roughDuration string
 	switch {
 	case dur > oneYear:
