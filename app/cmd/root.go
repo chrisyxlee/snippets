@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	reUsername = regexp.MustCompile(`Logged in to .* as (.*) \(.*\)`)
+	reUsername = regexp.MustCompile(`Logged in to .* (account|as) (.*) \(.*\)`)
 )
 
 // TODO: create a pie chart for how long you spent on each issue? (length of comment / most number of comments in this cycle) -- gantt??
@@ -74,7 +74,7 @@ func getUsername() (string, error) {
 				if group := reUsername.FindStringSubmatch(line); len(group) > 1 {
 					// TODO: ask user for permission to use the token
 					internal.Log().Debug().Msg("user has gh installed and is logged in")
-					return group[1], nil
+					return group[2], nil
 				}
 			}
 		} else {
