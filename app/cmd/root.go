@@ -19,7 +19,8 @@ import (
 )
 
 var (
-	reUsername = regexp.MustCompile(`Logged in to .* (account|as) (.*) \(.*\)`)
+	reUsername        = regexp.MustCompile(`Logged in to .* (account|as) (.*) \(.*\)`)
+	reOwnerRepository = regexp.MustCompile(`https://github.com/(.*)/(.*)/(pull|issue)/\d+`)
 )
 
 // TODO: create a pie chart for how long you spent on each issue? (length of comment / most number of comments in this cycle) -- gantt??
@@ -85,6 +86,14 @@ func getUsername() (string, error) {
 	return "", errors.New("")
 }
 
+func getOwnerAndRepository(htmlURL string) (string, string, error) {
+	if group := reOwnerRepository.FindStringSubmatch(htmlURL); len(group) > 2 {
+		return group[1], group[2], nil
+	}
+
+	return "", "", errors.New("no match for owner and repository")
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "snippet",
 	Short: "TODO",
@@ -139,9 +148,41 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("search issues with query `%s`: %w", issCreateQuery, err)
 		}
 
+		addIsMerged := func(issue *github.Issue, _ string) *format.GitHubIssue {
+			if issue.IsPullRequest() {
+				var isMerged bool
+				owner, repo, err := getOwnerAndRepository(issue.GetHTMLURL())
+				if err != nil {
+					internal.Log().Err(err).
+						Str("html_url", issue.GetHTMLURL()).
+						Msg("get owner and repository")
+				} else {
+					isMerged, _, err = client.PullRequests.IsMerged(
+						ctx,
+						owner,
+						repo,
+						issue.GetNumber())
+					if err != nil {
+						internal.Log().Err(err).Msg("check pull request is merged")
+						isMerged = false
+					}
+				}
+
+				return &format.GitHubIssue{
+					Merged: isMerged,
+					Issue:  issue,
+				}
+			}
+
+			return &format.GitHubIssue{
+				Issue: issue,
+			}
+		}
+
 		allIssues := lo.SliceToMap(issueRes.Issues, func(issue *github.Issue) (string, *github.Issue) {
 			return issue.GetURL(), issue
 		})
+		ghIssues := lo.MapValues(allIssues, addIsMerged)
 
 		issModQuery := fmt.Sprintf("author:%s updated:%s..%s",
 			username,
@@ -161,7 +202,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		for _, issue := range issueRes.Issues {
-			allIssues[issue.GetURL()] = issue
+			ghIssues[issue.GetURL()] = addIsMerged(issue, issue.GetURL())
 		}
 
 		within := func(target time.Time) bool {
@@ -181,23 +222,23 @@ var rootCmd = &cobra.Command{
 
 		report.WriteString(format.FormatSection("Completed this cycle",
 			moveBy(
-				allIssues,
-				func(issue *github.Issue) bool {
-					return issue.GetState() == "closed" && (within(issue.GetCreatedAt().Time) || issue.GetCreatedAt().Before(startTime))
+				ghIssues,
+				func(ghi *format.GitHubIssue) bool {
+					return ghi.Issue.GetState() == "closed" && (within(ghi.Issue.GetCreatedAt().Time) || ghi.Issue.GetCreatedAt().Before(startTime))
 				})))
 
 		report.WriteString(format.FormatSection("Updated this cycle",
 			moveBy(
-				allIssues,
-				func(issue *github.Issue) bool {
+				ghIssues,
+				func(ghi *format.GitHubIssue) bool {
 					// TODO: and has a recent comment from this user
-					return issue.GetClosedAt().Before(startTime)
+					return ghi.Issue.GetClosedAt().Before(startTime)
 				})))
 
 		report.WriteString(format.FormatSection("Remaining",
 			moveBy(
-				allIssues,
-				func(issue *github.Issue) bool {
+				ghIssues,
+				func(ghi *format.GitHubIssue) bool {
 					return true
 				})))
 
@@ -251,7 +292,7 @@ var rootCmd = &cobra.Command{
 			}
 
 			fmt.Println("remaining issues and prs:")
-			for _, issue := range allIssues {
+			for _, issue := range ghIssues {
 				fmt.Println(format.Issue(issue))
 			}
 		*/

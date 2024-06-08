@@ -40,6 +40,11 @@ var (
 		Bold(true)
 )
 
+type GitHubIssue struct {
+	Merged bool
+	Issue  *github.Issue
+}
+
 type CompletedIssue struct {
 	Type      string
 	ID        string
@@ -88,6 +93,11 @@ func (ci *CompletedIssue) Format(params completedIssueWidths) string {
 	var styleStatus lipgloss.Style
 	statusStyle := lipgloss.NewStyle().Width(params.Status)
 	switch ci.Status {
+	case "closed":
+		styleStatus = statusStyle.Foreground(lipgloss.AdaptiveColor{
+			Light: "#e60e8f",
+			Dark:  "#e67171",
+		})
 	case "merged":
 		styleStatus = statusStyle.Foreground(lipgloss.AdaptiveColor{
 			Light: "#a742f5",
@@ -130,25 +140,26 @@ func (ci *CompletedIssue) Format(params completedIssueWidths) string {
 	return buf.String()
 }
 
-func ParseCompleted(issue *github.Issue) *CompletedIssue {
+func ParseCompleted(ghi *GitHubIssue) *CompletedIssue {
 	// TODO: if only limited to 1 repo, then don't print
+	issue := ghi.Issue
 	return &CompletedIssue{
 		Type:      fmtType(issue),
 		ID:        styleNumber.Render(fmt.Sprintf("#%d", issue.GetNumber())),
-		Status:    fmtStatus(issue),
+		Status:    fmtStatus(ghi),
 		Title:     issue.GetTitle(),
 		Duration:  fmtDuration(issue),
 		Reactions: fmtReactions(issue.GetReactions()),
 	}
 }
 
-func ParseAllCompleted(issues []*github.Issue) []*CompletedIssue {
-	return lo.Map(issues, func(issue *github.Issue, _ int) *CompletedIssue {
-		return ParseCompleted(issue)
+func ParseAllCompleted(issues []*GitHubIssue) []*CompletedIssue {
+	return lo.Map(issues, func(ghi *GitHubIssue, _ int) *CompletedIssue {
+		return ParseCompleted(ghi)
 	})
 }
 
-func FormatSection(title string, issues []*github.Issue) string {
+func FormatSection(title string, issues []*GitHubIssue) string {
 	if len(issues) == 0 {
 		return ""
 	}
@@ -168,13 +179,17 @@ func FormatSection(title string, issues []*github.Issue) string {
 	return section.String()
 }
 
-func fmtStatus(issue *github.Issue) string {
+func fmtStatus(ghi *GitHubIssue) string {
 	var status string
+	issue := ghi.Issue
 
 	if issue.GetState() == "closed" {
 		if issue.IsPullRequest() {
-			// TODO: how to tell if the pull request was merged or closed?
-			status = "merged"
+			if ghi.Merged {
+				status = "merged"
+			} else {
+				status = "closed"
+			}
 		} else {
 			switch issue.GetStateReason() {
 			case "not_planned":
